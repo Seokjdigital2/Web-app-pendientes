@@ -1,0 +1,125 @@
+[
+  {
+    "color": "#1D4ED8",
+    "meetings": [],
+    "name": "CRUCE TEQUES",
+    "order": 10,
+    "id": "cruce-teques"
+  },
+  {
+    "color": "#16A34A",
+    "meetings": [],
+    "name": "ECOCE",
+    "order": 5,
+    "id": "ecoce"
+  },
+  {
+    "color": "#E11D48",
+    "meetings": [],
+    "name": "KJ SEO",
+    "order": 3,
+    "id": "kj-seo"
+  },
+  {
+    "color": "#A16207",
+    "meetings": [],
+    "name": "KOKO IA",
+    "order": 13,
+    "id": "koko-ia"
+  },
+  {
+    "color": "#7C3AED",
+    "meetings": [],
+    "name": "LAU LEÓN",
+    "order": 4,
+    "id": "lau-leon"
+  },
+  {
+    "color": "#F97316",
+    "meetings": [],
+    "name": "Lurozo",
+    "order": 9,
+    "id": "lurozo"
+  },
+  {
+    "color": "#7EC8E3",
+    "lastMeeting": {
+      "agreements": [
+        "Franco empieza el desarrollo del Home la semana del 5 de octubre y envía un mockup de la ficha de producto.",
+        "Ali manda el documento con textos acotados del Home el lunes 5 y se revisa en la reunión del martes.",
+        "Las campañas se reactivan después del nuevo Home y del checkout simplificado; Office es el producto prioritario.",
+        "Alberto, Ali y Alex arman el calendario promocional."
+      ],
+      "date": "2026-10-02",
+      "summary": "Se priorizó el rediseño del sitio: primero el nuevo Home y después las páginas de categoría, para poder reactivar las campañas. Las campañas están pausadas porque convertían poco y el proceso de compra es engorroso. Se simplifica el checkout con compra como invitado, pidiendo solo nombre y correo.",
+      "title": "Meeting Transcription (Alberto, Carlos y Franco)",
+      "url": "https://app.tactiq.io/api/2/u/m/r/GHcKhRPuqQb0qyr215Pl?o=mcp"
+    },
+    "meetings": [
+      {
+        "date": "2026-10-02",
+        "title": "Meeting Transcription (Alberto, Carlos y Franco)",
+        "url": "https://app.tactiq.io/api/2/u/m/r/GHcKhRPuqQb0qyr215Pl?o=mcp"
+      }
+    ],
+    "name": "Novatrading",
+    "order": 2,
+    "updatedAt": "2026-10-19",
+    "id": "novatrading"
+  },
+  {
+    "color": "#2DD4BF",
+    "lastMeeting": {
+      "agreements": [
+        "PhiMX entrega la lista antes / después y las capturas de los demos y subdominios eliminados. Sin esa lista Ali no puede redireccionar.",
+        "Seguimiento y validación de redirecciones el martes 20 de octubre.",
+        "Diego comparte el Drive de fotos; revisión de imágenes el viernes 23 de octubre.",
+        "Ali termina las metas de categorías (producto iXflash y blog) y envía diseños y textos de las landings."
+      ],
+      "date": "2026-10-16",
+      "summary": "Se revisó el cambio de URLs y taxonomías para que cada producto tenga una sola URL en lugar de 5 o 6. PhiMX hace los cambios en la base de datos y Ali las redirecciones 301 cuando llegue la lista antes / después. También se habló de imágenes, de Google Merchant y de la landing permanente de regalos tecnológicos para Buen Fin.",
+      "title": "Sesión de trabajo: DEV / SEO - PHI - KJ SEO",
+      "url": "https://app.tactiq.io/api/2/u/m/r/gHFh8eKErfGxBN6poZbY?o=mcp"
+    },
+    "meetings": [
+      {
+        "date": "2026-10-16",
+        "title": "Sesión de trabajo: DEV / SEO - PHI - KJ SEO",
+        "url": "https://app.tactiq.io/api/2/u/m/r/gHFh8eKErfGxBN6poZbY?o=mcp"
+      },
+      {
+        "date": "2026-10-14",
+        "title": "On boarding - PLAN SEO + RRSS (Regina y Alitzel)",
+        "url": "https://app.tactiq.io/api/2/u/m/r/yQjRPB1uTPMx2DCNbiVB?o=mcp"
+      },
+      {
+        "date": "2026-10-09",
+        "title": "DEV + SEO - Sesión trabajo PHI",
+        "url": "https://app.tactiq.io/api/2/u/m/r/PbWyW0WL2M7V3aFUiOWp?o=mcp"
+      },
+      {
+        "date": "2026-09-30",
+        "title": "PHI - Sesión de trabajo SEO + DEV",
+        "url": "https://app.tactiq.io/api/2/u/m/r/eeejLMW6UDhGgcJKcHhe?o=mcp"
+      }
+    ],
+    "name": "PHI",
+    "order": 1,
+    "updatedAt": "2026-10-19",
+    "id": "phi"
+  },
+  {
+    "color": "#0B1440",
+    "meetings": [],
+    "name": "SOAINT",
+    "order": 12,
+    "id": "soaint"
+  },
+  {
+    "color": "#FF69B4",
+    "meetings": [],
+    "name": "Tania",
+    "order": 6,
+    "id": "tania"
+  }
+]
