@@ -129,13 +129,19 @@ export default function Home() {
     toast('Movido a mañana');
   }
 
-  async function updateTaskStatus(id, value) {
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status: value } : t)));
-    try {
-      await fetch(`/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: value }) });
-    } catch (e) {
-      toast('No se pudo guardar el estatus del Gantt');
+  async function updateTask(id, patch) {
+    const prevTasks = tasks;
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+    const res = await fetch(`/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+    const data = await res.json();
+    if (!res.ok) {
+      setTasks(prevTasks);
+      const err = new Error(data.error || 'No se pudo guardar el cambio');
+      err.code = data.code;
+      throw err;
     }
+    if (data.task) setTasks((prev) => prev.map((t) => (t.id === id ? data.task : t)));
+    return data.task;
   }
 
   function openDayModal(dateISO, precomputedList) {
@@ -232,7 +238,7 @@ export default function Home() {
                 clients={clients}
                 tasks={tasks}
                 onUpdateItemField={updateItemField}
-                onUpdateTaskStatus={updateTaskStatus}
+                onUpdateTask={updateTask}
               />
             )}
           </>

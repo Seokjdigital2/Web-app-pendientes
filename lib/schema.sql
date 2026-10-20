@@ -44,3 +44,31 @@ CREATE TABLE IF NOT EXISTS tasks (
   meeting_date TEXT DEFAULT '',
   updated_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- Columnas agregadas por el rediseño del Gantt (catálogo de responsables,
+-- avance manual, bloqueo con motivo, entregable/meta). ALTER idempotente
+-- para que correr migrate.mjs de nuevo contra una base ya existente no falle.
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_ids JSONB DEFAULT '[]';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS progress INTEGER;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS blocked_reason TEXT DEFAULT '';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS deliverable TEXT DEFAULT '';
+
+CREATE TABLE IF NOT EXISTS people (
+  id TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  "order" INTEGER DEFAULT 0
+);
+
+-- Historial de cambios manuales (fecha, estatus, avance, bloqueo, responsables)
+-- por tarea de Gantt. old_value/new_value se guardan como texto (JSON cuando
+-- el valor no es un string simple) para no tener que tipar una columna por campo.
+CREATE TABLE IF NOT EXISTS task_history (
+  id BIGSERIAL PRIMARY KEY,
+  task_id TEXT NOT NULL,
+  field TEXT NOT NULL,
+  old_value TEXT,
+  new_value TEXT,
+  note TEXT DEFAULT '',
+  changed_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS task_history_task_id_idx ON task_history (task_id);

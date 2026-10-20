@@ -1,7 +1,23 @@
 import { NextResponse } from 'next/server';
-import { updateTask, deleteTask } from '@/lib/store';
+import { updateTask, deleteTask, getTaskHistory } from '@/lib/store';
 
 export const dynamic = 'force-dynamic';
+
+const CODE_STATUS = {
+  invalid_dates: 400,
+  blocked_reason_required: 409,
+  progress_required_on_reopen: 409,
+};
+
+export async function GET(_req, { params }) {
+  try {
+    const { id } = await params;
+    const history = await getTaskHistory(id);
+    return NextResponse.json({ history });
+  } catch (e) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
+}
 
 export async function PATCH(req, { params }) {
   try {
@@ -10,7 +26,8 @@ export async function PATCH(req, { params }) {
     const task = await updateTask(id, patch);
     return NextResponse.json({ task });
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    const status = CODE_STATUS[e.code] || 500;
+    return NextResponse.json({ error: e.message, code: e.code }, { status });
   }
 }
 
