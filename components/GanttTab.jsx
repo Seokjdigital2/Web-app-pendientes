@@ -11,11 +11,14 @@ import PeoplePicker from './PeoplePicker';
 import PercentPopover from './PercentPopover';
 import PromptModal from './PromptModal';
 import HistoryModal from './HistoryModal';
+import ColumnFilter from './ColumnFilter';
+import AddTaskModal from './AddTaskModal';
 
 const HEADER_GROUP = { dia: 'day', semana: 'week', mes: 'month' };
 
 const DEFAULT_COL_WIDTHS = {
   name: 220,
+  category: 130,
   resp: 140,
   status: 118,
   start: 108,
@@ -26,6 +29,7 @@ const DEFAULT_COL_WIDTHS = {
 
 const COLUMNS = [
   ['name', 'Nombre de la tarea'],
+  ['category', 'Categoría'],
   ['resp', 'Responsables'],
   ['status', 'Estatus'],
   ['start', 'Fecha inicio'],
@@ -33,6 +37,17 @@ const COLUMNS = [
   ['deliverable', 'Entregable / Meta'],
   ['barriers', 'Barreras / Observaciones'],
 ];
+
+const DEFAULT_CATEGORIES = ['Planeación', 'Revisión', 'Operación técnica', 'Contenido', 'Diseño', 'Reportes'];
+
+function slugify(n) {
+  return String(n)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
 
 function Legend() {
   return (
@@ -67,11 +82,11 @@ function AutoTextarea({ value, placeholder, onCommit, readOnly }) {
   );
 }
 
-function Controls({ scope, fResp, fPerson, hideDone, onRespChange, onPersonChange, onToggleDone, onShift, onToday }) {
+function Controls({ scope, peopleCatalog, fResp, fPerson, hideDone, onRespChange, onPersonChange, onToggleDone, onShift, onToday }) {
   const cnt = {};
   const lab = {};
   (scope || []).forEach((t) => {
-    assigneesOfTask(t).forEach((p) => {
+    assigneesOfTask(t, peopleCatalog).forEach((p) => {
       if (p.k === 'ali') return;
       cnt[p.k] = (cnt[p.k] || 0) + 1;
       lab[p.k] = lab[p.k] && /[áéíóúÁÉÍÓÚ]/.test(lab[p.k]) ? lab[p.k] : p.label;
@@ -110,14 +125,14 @@ function Controls({ scope, fResp, fPerson, hideDone, onRespChange, onPersonChang
 // reales) se usan esos; si no (tareas sintéticas del panel, o tareas viejas
 // sin migrar) se derivan del texto libre `resp`, con la misma unificación
 // Ali/ALI/Alitzel -> "Ali".
-function assigneesOfTask(t) {
+function assigneesOfTask(t, catalog) {
   if (Array.isArray(t.assigneeIds) && t.assigneeIds.length) {
-    return t.assigneeIds.map((id) => ({ k: id, label: id }));
+    return t.assigneeIds.map((id) => ({ k: id, label: catalog?.find((p) => p.id === id)?.label || id }));
   }
   return peopleOf(t.resp);
 }
 
-export default function GanttTab({ items, clients, tasks, onUpdateItemField, onUpdateTask }) {
+export default function GanttTab({ items, clients, tasks, onUpdateItemField, onCreateTask, onCreateClient, onUpdateTask, onDeleteTask }) {
   const [tab, setTab] = useState('super');
   const [fResp, setFResp] = useState('all');
   const [fPerson, setFPerson] = useState('');
@@ -131,6 +146,9 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onU
   const [modal, setModal] = useState(null); // {type, taskId, extra}
   const [historyModal, setHistoryModal] = useState(null); // {taskId, entries}
   const [toastMsg, setToastMsg] = useState('');
+  const [statusFilter, setStatusFilter] = useState([]);
+  const [categoryFilter, setCategoryFilter] = useState([]);
+  const [addTaskOpen, setAddTaskOpen] = useState(false);
 
   useEffect(() => {
     fetch('/api/people').then((r) => r.json()).then((d) => setPeople(d.people || [])).catch(() => {});
@@ -159,13 +177,21 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onU
 
   const canWrite = true;
   function pass(t) {
-    const as = assigneesOfTask(t).map((p) => p.k);
+    const as = assigneesOfTask(t, peopleCatalog).map((p) => p.k);
     if (fPerson && !as.includes(fPerson)) return false;
     if (fResp === 'ali' && !as.includes('ali')) return false;
     if (fResp === 'otros' && as.includes('ali')) return false;
     if (hideDone && t.status === 'Hecho') return false;
+    if (statusFilter.length && !statusFilter.includes(t.status || 'Pendiente')) return false;
+    if (categoryFilter.length && !categoryFilter.includes(t.category || '(sin categoría)')) return false;
     return true;
   }
+
+  const categoryOptions = useMemo(() => {
+    const seen = new Set(DEFAULT_CATEGORIES);
+    tasks.forEach((t) => { if (t.category) seen.add(t.category); });
+    return [...seen].sort();
+  }, [tasks]);
 
   const CL = useMemo(() => allClients(clients, items), [clients, items]);
   const activeTab = CL.some((c) => c.id === tab) ? tab : 'super';
@@ -237,6 +263,40 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onU
     saveTask(task, { [field]: value });
   }
 
+  function requestDelete(task) {
+    setModal({ type: 'delete', taskId: task.id, task });
+  }
+
+  async function handleCreateTask(form) {
+    const client = CL.find((c) => c.name.toLowerCase() === form.clientName.toLowerCase());
+    let clientId = client ? client.id : slugify(form.clientName);
+    if (!client) {
+      const created = await onCreateClient(clientId, form.clientName);
+      if (!created) return toast('No se pudo crear el cliente nuevo');
+    }
+    const assigneePeople = peopleOf(form.resp || '');
+    for (const p of assigneePeople) {
+      if (!peopleCatalog.some((pp) => pp.id === p.k)) await createPerson(p.label);
+    }
+    try {
+      await onCreateTask({
+        client: clientId,
+        activity: form.activity,
+        category: form.category,
+        resp: form.resp,
+        assigneeIds: assigneePeople.map((p) => p.k),
+        status: form.status,
+        start: form.start,
+        end: form.end,
+        deliverable: form.deliverable,
+        note: form.note,
+        dateKind: 'agreed',
+      });
+    } catch (e) {
+      toast(e.message || 'No se pudo agregar el pendiente');
+    }
+  }
+
   async function openHistory(task) {
     if (String(task.id).indexOf('p-') === 0) return toast('Esta tarea viene del panel de Pendientes, no tiene historial de Gantt.');
     const res = await fetch(`/api/tasks/${task.id}`);
@@ -249,7 +309,7 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onU
   }
 
   function TaskRow({ task, client }) {
-    const assignees = assigneesOfTask(task);
+    const assignees = assigneesOfTask(task, peopleCatalog);
     const isPanel = String(task.id).indexOf('p-') === 0;
     const sp = task.start ? span(task, winStart, windowDays) : null;
     const hidden = task.occ ? false : (!sp || sp.out);
@@ -277,8 +337,30 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onU
               >
                 🕘 historial
               </button>
+              {!isPanel && (
+                <button
+                  type="button"
+                  onClick={() => requestDelete(task)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', fontSize: 10 }}
+                  title="Eliminar pendiente"
+                >
+                  🗑 eliminar
+                </button>
+              )}
             </div>
           </div>
+        </ResizableCol>
+
+        <ResizableCol width={colWidths.category} onResize={(w) => resizeCol('category', w)}>
+          <input
+            list="gx-categories"
+            className="gt-date-input"
+            style={{ fontFamily: 'inherit' }}
+            defaultValue={task.category || ''}
+            disabled={isPanel}
+            placeholder="—"
+            onBlur={(e) => { if (!isPanel && e.target.value !== (task.category || '')) saveTask(task, { category: e.target.value }); }}
+          />
         </ResizableCol>
 
         <ResizableCol width={colWidths.resp} onResize={(w) => resizeCol('resp', w)}>
@@ -410,7 +492,13 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onU
       <div className="gt-row gt-head-row">
         {COLUMNS.map(([key, label], i) => (
           <ResizableCol key={key} width={colWidths[key]} sticky={i === 0} onResize={(w) => resizeCol(key, w)}>
-            {label}
+            <span>{label}</span>
+            {key === 'category' && (
+              <ColumnFilter label="categoría" options={categoryOptions} selected={categoryFilter} onChange={setCategoryFilter} />
+            )}
+            {key === 'status' && (
+              <ColumnFilter label="estatus" options={STATUSES} selected={statusFilter} onChange={setStatusFilter} />
+            )}
           </ResizableCol>
         ))}
         <TimelineHeader winStart={winStart} windowDays={windowDays} pxPerDay={scale.pxPerDay} headerGroup={headerGroup} />
@@ -432,7 +520,7 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onU
                 <div>
                   <div className="t-name" style={{ border: 'none' }}>{t.activity}</div>
                   <div className="t-meta">
-                    <span className={`resp${isMine(t.resp) ? ' me' : ''}`}>{assigneesOfTask(t).map((p) => p.label).join(', ') || '—'}</span>
+                    <span className={`resp${isMine(t.resp) ? ' me' : ''}`}>{assigneesOfTask(t, peopleCatalog).map((p) => p.label).join(', ') || '—'}</span>
                     {incomplete && <span className="gt-unscheduled-badge">Programación incompleta</span>}
                   </div>
                 </div>
@@ -511,7 +599,7 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onU
       <>
         <div className="strip">{strip}</div>
         <ScaleAndNav scopeTasks={allTasksFlat} />
-        <Controls scope={allTasksFlat} fResp={fResp} fPerson={fPerson} hideDone={hideDone} onRespChange={onRespChange} onPersonChange={onPersonChange} onToggleDone={() => setHideDone((h) => !h)} onShift={shift} onToday={goToday} />
+        <Controls scope={allTasksFlat} peopleCatalog={peopleCatalog} fResp={fResp} fPerson={fPerson} hideDone={hideDone} onRespChange={onRespChange} onPersonChange={onPersonChange} onToggleDone={() => setHideDone((h) => !h)} onShift={shift} onToday={goToday} />
         <Legend />
         {rows.length ? (
           <div className="gantt-scroll">
@@ -562,7 +650,7 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onU
           </section>
         )}
         <ScaleAndNav scopeTasks={all} />
-        <Controls scope={all} fResp={fResp} fPerson={fPerson} hideDone={hideDone} onRespChange={onRespChange} onPersonChange={onPersonChange} onToggleDone={() => setHideDone((h) => !h)} onShift={shift} onToday={goToday} />
+        <Controls scope={all} peopleCatalog={peopleCatalog} fResp={fResp} fPerson={fPerson} hideDone={hideDone} onRespChange={onRespChange} onPersonChange={onPersonChange} onToggleDone={() => setHideDone((h) => !h)} onShift={shift} onToday={goToday} />
         <Legend />
         {vis.length ? (
           <div className="gantt-scroll">
@@ -588,7 +676,11 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onU
       <div id="gx">
         <div className="section-head">
           <div><h2>Gantt de clientes</h2><p>{sub}</p></div>
+          <button className="primary" onClick={() => setAddTaskOpen(true)}>+ Agregar pendiente</button>
         </div>
+        <datalist id="gx-categories">
+          {categoryOptions.map((c) => <option key={c} value={c} />)}
+        </datalist>
         <div className="gx-tabs">
           <button className="gx-tab" aria-current={activeTab === 'super' ? 'page' : undefined} onClick={() => setTab('super')}>Super Gantt</button>
           {CL.map((c) => (
@@ -639,7 +731,26 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onU
         }}
         onCancel={() => setModal(null)}
       />
+      <PromptModal
+        open={modal?.type === 'delete'}
+        title="Eliminar pendiente"
+        message={`¿Seguro que quieres eliminar "${modal?.task?.activity || ''}"? Esta acción no se puede deshacer.`}
+        mode="confirm"
+        confirmLabel="Sí, eliminar"
+        onConfirm={() => {
+          onDeleteTask(modal.task.id);
+          setModal(null);
+        }}
+        onCancel={() => setModal(null)}
+      />
       <HistoryModal open={!!historyModal} entries={historyModal?.entries || []} onClose={() => setHistoryModal(null)} />
+      <AddTaskModal
+        open={addTaskOpen}
+        clients={CL}
+        categories={categoryOptions}
+        onClose={() => setAddTaskOpen(false)}
+        onCreate={handleCreateTask}
+      />
       <div className={`toast${toastMsg ? ' show' : ''}`}>{toastMsg}</div>
     </section>
   );
