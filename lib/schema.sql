@@ -16,6 +16,11 @@ CREATE TABLE IF NOT EXISTS items (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Categoría y Entregable/Meta agregados para que las tareas sintéticas del
+-- Gantt (provenientes del panel de pendientes) también sean editables ahí.
+ALTER TABLE items ADD COLUMN IF NOT EXISTS category TEXT DEFAULT '';
+ALTER TABLE items ADD COLUMN IF NOT EXISTS deliverable TEXT DEFAULT '';
+
 CREATE TABLE IF NOT EXISTS clients (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,

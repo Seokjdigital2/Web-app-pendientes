@@ -82,6 +82,40 @@ function AutoTextarea({ value, placeholder, onCommit, readOnly }) {
   );
 }
 
+// Link a un archivo (Drive, Dropbox, etc.) para el Entregable/Meta. Mientras
+// no se edita y ya tiene valor, se ve como link clicable; al enfocar se
+// vuelve editable para pegar o cambiar la URL.
+function DocLink({ value, onCommit }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value || '');
+  useEffect(() => setDraft(value || ''), [value]);
+
+  if (!editing && value) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <a href={value} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: 'var(--steel)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+          📎 {value}
+        </a>
+        <button type="button" onClick={() => setEditing(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: 'var(--muted)' }}>editar</button>
+      </div>
+    );
+  }
+  return (
+    <input
+      type="url"
+      className="gt-date-input"
+      placeholder="📎 Link del archivo (Drive, etc.)…"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        setEditing(false);
+        if (draft !== (value || '')) onCommit(draft);
+      }}
+      autoFocus={editing}
+    />
+  );
+}
+
 function Controls({ scope, peopleCatalog, fResp, fPerson, hideDone, onRespChange, onPersonChange, onToggleDone, onShift, onToday }) {
   const cnt = {};
   const lab = {};
@@ -223,11 +257,11 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
     if (String(task.id).indexOf('p-') === 0) {
       // tarea sintética del panel de pendientes: solo estatus/fecha/nota/nombre viven en `items`
       const itemId = task.id.slice(2);
-      const map = { status: 'status', note: 'desc', activity: 'activity' };
+      const map = { status: 'status', note: 'desc', activity: 'activity', category: 'category', deliverable: 'deliverable', doc: 'doc' };
       for (const [k, v] of Object.entries(patch)) {
         if (k === 'start' || k === 'end') await onUpdateItemField(itemId, 'date', v);
         else if (map[k]) await onUpdateItemField(itemId, map[k], v);
-        else toast('Ese campo no aplica a pendientes del panel — edítalo desde la pestaña Pendientes.');
+        else toast('Ese campo no aplica a pendientes del panel.');
       }
       return;
     }
@@ -357,9 +391,8 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
             className="gt-date-input"
             style={{ fontFamily: 'inherit' }}
             defaultValue={task.category || ''}
-            disabled={isPanel}
             placeholder="—"
-            onBlur={(e) => { if (!isPanel && e.target.value !== (task.category || '')) saveTask(task, { category: e.target.value }); }}
+            onBlur={(e) => { if (e.target.value !== (task.category || '')) saveTask(task, { category: e.target.value }); }}
           />
         </ResizableCol>
 
@@ -402,12 +435,14 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
         </ResizableCol>
 
         <ResizableCol width={colWidths.deliverable} onResize={(w) => resizeCol('deliverable', w)}>
-          <AutoTextarea
-            value={task.deliverable}
-            readOnly={isPanel}
-            placeholder={isPanel ? '—' : 'Agregar entregable…'}
-            onCommit={(v) => saveTask(task, { deliverable: v })}
-          />
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <AutoTextarea
+              value={task.deliverable}
+              placeholder="Agregar entregable…"
+              onCommit={(v) => saveTask(task, { deliverable: v })}
+            />
+            <DocLink value={task.doc} onCommit={(v) => saveTask(task, { doc: v })} />
+          </div>
         </ResizableCol>
 
         <ResizableCol width={colWidths.barriers} onResize={(w) => resizeCol('barriers', w)}>
