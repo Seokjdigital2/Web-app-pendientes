@@ -1,9 +1,9 @@
 'use client';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  SCALES, DAY, SKEY, STATUSES,
+  SCALES, DAY, SKEY, STATUSES, PROJECT_TYPES, PRIORITIES, FREQ_LABELS, OBJECTIVE_TEMPLATES, METRIC_OPTIONS,
   allClients, byStart, colorOf, datesText, fmt, fmtY, fullRangeOf, isMine, mondayMs,
-  onColor, peopleOf, span, tasksOf, todayStr, U,
+  onColor, peopleOf, span, tasksOf, todayStr, U, categoriesFor, allCategoryOptions, isOverdue,
 } from '@/lib/gantt';
 import { TimelineHeader, TimelineBars } from './GanttGrid';
 import ResizableCol from './ResizableCol';
@@ -13,32 +13,47 @@ import PromptModal from './PromptModal';
 import HistoryModal from './HistoryModal';
 import ColumnFilter from './ColumnFilter';
 import AddTaskModal from './AddTaskModal';
+import { advisorWarnings } from '@/lib/advisor';
 
 const HEADER_GROUP = { dia: 'day', semana: 'week', mes: 'month' };
 
 const DEFAULT_COL_WIDTHS = {
-  name: 220,
-  category: 130,
-  resp: 140,
+  name: 200,
+  client: 110,
+  projectType: 100,
+  category: 120,
+  priority: 110,
+  freq: 110,
+  resp: 130,
   status: 118,
   start: 108,
   end: 108,
-  deliverable: 170,
-  barriers: 200,
+  review: 108,
+  dependsOn: 150,
+  objectiveParticular: 160,
+  metric: 150,
+  deliverable: 160,
+  barriers: 180,
 };
 
 const COLUMNS = [
   ['name', 'Nombre de la tarea'],
+  ['client', 'Cliente'],
+  ['projectType', 'Tipo de proyecto'],
   ['category', 'Categoría'],
+  ['priority', 'Prioridad'],
+  ['freq', 'Frecuencia'],
   ['resp', 'Responsables'],
   ['status', 'Estatus'],
   ['start', 'Fecha inicio'],
   ['end', 'Fecha entrega'],
+  ['review', 'Fecha de revisión'],
+  ['dependsOn', 'Depende de'],
+  ['objectiveParticular', 'Objetivo Particular'],
+  ['metric', 'Cómo se mide'],
   ['deliverable', 'Entregable / Meta'],
   ['barriers', 'Barreras / Observaciones'],
 ];
-
-const DEFAULT_CATEGORIES = ['Planeación', 'Revisión', 'Operación técnica', 'Contenido', 'Diseño', 'Reportes'];
 
 function slugify(n) {
   return String(n)
@@ -116,42 +131,18 @@ function DocLink({ value, onCommit }) {
   );
 }
 
-function Controls({ scope, peopleCatalog, fResp, fPerson, hideDone, onRespChange, onPersonChange, onToggleDone, onShift, onToday }) {
-  const cnt = {};
-  const lab = {};
-  (scope || []).forEach((t) => {
-    assigneesOfTask(t, peopleCatalog).forEach((p) => {
-      if (p.k === 'ali') return;
-      cnt[p.k] = (cnt[p.k] || 0) + 1;
-      lab[p.k] = lab[p.k] && /[áéíóúÁÉÍÓÚ]/.test(lab[p.k]) ? lab[p.k] : p.label;
-    });
-  });
-  const keys = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || a.localeCompare(b));
+function Controls({ hideDone, onToggleDone, onShift, onToday }) {
   return (
-    <>
-      <div className="controls">
-        <div className="chips">
-          <button className="chip" aria-pressed={fResp === 'all' && !fPerson} onClick={() => onRespChange('all')}>Todos</button>
-          <button className="chip" aria-pressed={fResp === 'ali' && !fPerson} onClick={() => onRespChange('ali')}>Solo Ali</button>
-          <button className="chip" aria-pressed={fResp === 'otros' && !fPerson} onClick={() => onRespChange('otros')}>De otros</button>
-          <button className="chip" aria-pressed={hideDone} onClick={onToggleDone}>Ocultar hechos</button>
-        </div>
-        <div className="chips">
-          <button className="btn" onClick={() => onShift(-1)}>← 1 sem</button>
-          <button className="btn" onClick={onToday}>Hoy</button>
-          <button className="btn" onClick={() => onShift(1)}>1 sem →</button>
-        </div>
+    <div className="controls">
+      <div className="chips">
+        <button className="chip" aria-pressed={hideDone} onClick={onToggleDone}>Ocultar hechos</button>
       </div>
-      {keys.length > 0 && (
-        <div className="chips people" role="group" aria-label="Filtrar por integrante">
-          {keys.map((k) => (
-            <button key={k} className="chip" aria-pressed={fPerson === k} onClick={() => onPersonChange(k)}>
-              {lab[k]} <em>{cnt[k]}</em>
-            </button>
-          ))}
-        </div>
-      )}
-    </>
+      <div className="chips">
+        <button className="btn" onClick={() => onShift(-1)}>← 1 sem</button>
+        <button className="btn" onClick={onToday}>Hoy</button>
+        <button className="btn" onClick={() => onShift(1)}>1 sem →</button>
+      </div>
+    </div>
   );
 }
 
@@ -166,10 +157,8 @@ function assigneesOfTask(t, catalog) {
   return peopleOf(t.resp);
 }
 
-export default function GanttTab({ items, clients, tasks, onUpdateItemField, onCreateTask, onCreateClient, onUpdateTask, onDeleteTask }) {
+export default function GanttTab({ items, clients, tasks, onUpdateItemField, onCreateTask, onCreateClient, onUpdateTask, onDeleteTask, onUpdateClient }) {
   const [tab, setTab] = useState('super');
-  const [fResp, setFResp] = useState('all');
-  const [fPerson, setFPerson] = useState('');
   const [hideDone, setHideDone] = useState(false);
   const [scaleKey, setScaleKey] = useState('dia');
   const [winStart, setWinStart] = useState(() => mondayMs(U(todayStr())) - 7 * DAY);
@@ -182,6 +171,10 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
   const [toastMsg, setToastMsg] = useState('');
   const [statusFilter, setStatusFilter] = useState([]);
   const [categoryFilter, setCategoryFilter] = useState([]);
+  const [projectTypeFilter, setProjectTypeFilter] = useState([]);
+  const [priorityFilter, setPriorityFilter] = useState([]);
+  const [freqFilter, setFreqFilter] = useState([]);
+  const [respFilter, setRespFilter] = useState([]);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
 
   useEffect(() => {
@@ -196,8 +189,9 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
   const peopleCatalog = useMemo(() => {
     const extra = {};
     tasks.forEach((t) => assigneesOfTask(t).forEach((p) => { if (!people.some((pp) => pp.id === p.k)) extra[p.k] = p.label; }));
+    items.forEach((i) => peopleOf(i.resp).forEach((p) => { if (!people.some((pp) => pp.id === p.k)) extra[p.k] = p.label; }));
     return [...people, ...Object.entries(extra).map(([id, label]) => ({ id, label }))];
-  }, [people, tasks]);
+  }, [people, tasks, items]);
 
   async function createPerson(label) {
     const res = await fetch('/api/people', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label }) });
@@ -211,29 +205,34 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
 
   const canWrite = true;
   function pass(t) {
-    const as = assigneesOfTask(t, peopleCatalog).map((p) => p.k);
-    if (fPerson && !as.includes(fPerson)) return false;
-    if (fResp === 'ali' && !as.includes('ali')) return false;
-    if (fResp === 'otros' && as.includes('ali')) return false;
+    const as = assigneesOfTask(t, peopleCatalog);
+    if (respFilter.length && !as.some((p) => respFilter.includes(p.label))) return false;
     if (hideDone && t.status === 'Hecho') return false;
     if (statusFilter.length && !statusFilter.includes(t.status || 'Pendiente')) return false;
     if (categoryFilter.length && !categoryFilter.includes(t.category || '(sin categoría)')) return false;
+    if (projectTypeFilter.length && !projectTypeFilter.includes(t.projectType || '(sin tipo)')) return false;
+    if (priorityFilter.length && !priorityFilter.includes(t.priority || '2')) return false;
+    if (freqFilter.length && !freqFilter.includes(t.freq || 'One-shot')) return false;
     return true;
   }
 
   const categoryOptions = useMemo(() => {
-    const seen = new Set(DEFAULT_CATEGORIES);
+    const seen = new Set(allCategoryOptions());
     tasks.forEach((t) => { if (t.category) seen.add(t.category); });
-    return [...seen].sort();
+    return [...seen];
   }, [tasks]);
+
+  const respOptions = useMemo(() => {
+    const seen = new Set();
+    tasks.forEach((t) => assigneesOfTask(t, peopleCatalog).forEach((p) => seen.add(p.label)));
+    return [...seen].sort((a, b) => a.localeCompare(b));
+  }, [tasks, peopleCatalog]);
 
   const CL = useMemo(() => allClients(clients, items), [clients, items]);
   const activeTab = CL.some((c) => c.id === tab) ? tab : 'super';
   const scale = SCALES[scaleKey];
   const headerGroup = HEADER_GROUP[scaleKey];
 
-  function onRespChange(v) { setFResp(v); setFPerson(''); }
-  function onPersonChange(v) { setFPerson((p) => (p === v ? '' : v)); setFResp('all'); }
   function shift(weeks) { setWinStart((w) => w + weeks * 7 * DAY); }
   function goToday() { setWinStart(mondayMs(U(todayStr())) - 7 * DAY); setWindowDays(scale.days); }
   function changeScale(key) { setScaleKey(key); setWindowDays(SCALES[key].days); }
@@ -257,9 +256,17 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
     if (String(task.id).indexOf('p-') === 0) {
       // tarea sintética del panel de pendientes: solo estatus/fecha/nota/nombre viven en `items`
       const itemId = task.id.slice(2);
-      const map = { status: 'status', note: 'desc', activity: 'activity', category: 'category', deliverable: 'deliverable', doc: 'doc' };
+      const map = {
+        status: 'status', note: 'desc', activity: 'activity', category: 'category', deliverable: 'deliverable', doc: 'doc',
+        priority: 'p', freq: 'freq', projectType: 'projectType', objectiveGeneral: 'objectiveGeneral', objectiveParticular: 'objectiveParticular', dependsOn: 'dependsOn',
+        reviewDate: 'reviewDate', metric: 'metric',
+      };
       for (const [k, v] of Object.entries(patch)) {
         if (k === 'start' || k === 'end') await onUpdateItemField(itemId, 'date', v);
+        else if (k === 'assigneeIds') {
+          const labels = v.map((id) => peopleCatalog.find((p) => p.id === id)?.label || id).join(', ');
+          await onUpdateItemField(itemId, 'resp', labels);
+        }
         else if (map[k]) await onUpdateItemField(itemId, map[k], v);
         else toast('Ese campo no aplica a pendientes del panel.');
       }
@@ -317,6 +324,13 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
         client: clientId,
         activity: form.activity,
         category: form.category,
+        projectType: form.projectType,
+        priority: form.priority,
+        freq: form.freq,
+        objectiveParticular: form.objectiveParticular,
+        metric: form.metric,
+        reviewDate: form.reviewDate,
+        dependsOn: form.dependsOn,
         resp: form.resp,
         assigneeIds: assigneePeople.map((p) => p.k),
         status: form.status,
@@ -329,6 +343,11 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
     } catch (e) {
       toast(e.message || 'No se pudo agregar el pendiente');
     }
+  }
+
+  function tasksForClientName(name) {
+    const c = CL.find((x) => x.name.toLowerCase() === String(name || '').toLowerCase());
+    return c ? tasksOf(c.id, clients, items, tasks, winStart, windowDays) : [];
   }
 
   async function openHistory(task) {
@@ -350,9 +369,12 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
     const c = client;
     const col = colorOf(c);
     const on = onColor(col);
+    const overdue = isOverdue(task, todayStr());
+    const dependency = task.dependsOn ? tasksOf(c.id, clients, items, tasks, winStart, windowDays).find((x) => x.id === task.dependsOn) : null;
+    const dependencyPending = dependency && dependency.status !== 'Hecho';
 
     return (
-      <div className="gt-row">
+      <div className={`gt-row${overdue ? ' gt-overdue' : ''}`}>
         <ResizableCol width={colWidths.name} sticky onResize={(w) => resizeCol('name', w)}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>
             <AutoTextarea
@@ -363,6 +385,7 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
             <div className="t-meta">
               {task.dateKind === 'inferred' && <span>estimada</span>}
               {task.milestone && <span>· hito</span>}
+              {overdue && <span style={{ color: 'var(--red)', fontWeight: 700 }}>· atrasada</span>}
               <button
                 type="button"
                 onClick={() => openHistory(task)}
@@ -385,9 +408,36 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
           </div>
         </ResizableCol>
 
+        <ResizableCol width={colWidths.client} onResize={(w) => resizeCol('client', w)}>
+          {isPanel ? (
+            <span style={{ fontSize: 12.5 }}>{client.name}</span>
+          ) : (
+            <select
+              className="gt-date-input"
+              style={{ fontFamily: 'inherit' }}
+              value={task.client || ''}
+              onChange={(e) => saveTask(task, { client: e.target.value })}
+            >
+              {CL.filter((x) => x.id !== 'super').map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            </select>
+          )}
+        </ResizableCol>
+
+        <ResizableCol width={colWidths.projectType} onResize={(w) => resizeCol('projectType', w)}>
+          <select
+            className="gt-date-input"
+            style={{ fontFamily: 'inherit' }}
+            value={task.projectType || ''}
+            onChange={(e) => saveTask(task, { projectType: e.target.value })}
+          >
+            <option value="">—</option>
+            {PROJECT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </ResizableCol>
+
         <ResizableCol width={colWidths.category} onResize={(w) => resizeCol('category', w)}>
           <input
-            list="gx-categories"
+            list={`gx-categories-${task.projectType ? task.projectType.replace(/[^a-z0-9]/gi, '') : 'all'}`}
             className="gt-date-input"
             style={{ fontFamily: 'inherit' }}
             defaultValue={task.category || ''}
@@ -396,11 +446,32 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
           />
         </ResizableCol>
 
+        <ResizableCol width={colWidths.priority} onResize={(w) => resizeCol('priority', w)}>
+          <select
+            className="gt-date-input"
+            style={{ fontFamily: 'inherit' }}
+            value={task.priority || '2'}
+            onChange={(e) => saveTask(task, { priority: e.target.value })}
+          >
+            {PRIORITIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </ResizableCol>
+
+        <ResizableCol width={colWidths.freq} onResize={(w) => resizeCol('freq', w)}>
+          <select
+            className="gt-date-input"
+            style={{ fontFamily: 'inherit' }}
+            value={task.freq || ''}
+            onChange={(e) => saveTask(task, { freq: e.target.value })}
+          >
+            {FREQ_LABELS.map(([v, l]) => <option key={v || 'one'} value={v}>{l}</option>)}
+          </select>
+        </ResizableCol>
+
         <ResizableCol width={colWidths.resp} onResize={(w) => resizeCol('resp', w)}>
           <PeoplePicker
             people={peopleCatalog}
             selectedIds={assignees.map((p) => p.k)}
-            disabled={isPanel}
             onChange={(ids) => saveTask(task, { assigneeIds: ids })}
             onCreatePerson={createPerson}
           />
@@ -414,6 +485,11 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
           >
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
+          {dependencyPending && (
+            <div style={{ fontSize: 9.5, color: 'var(--red)', marginTop: 2 }} title={`Depende de: ${dependency.activity}`}>
+              ⛔ depende de tarea sin terminar
+            </div>
+          )}
         </ResizableCol>
 
         <ResizableCol width={colWidths.start} onResize={(w) => resizeCol('start', w)}>
@@ -431,6 +507,49 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
             className="gt-date-input"
             value={task.end || ''}
             onChange={(e) => requestDateChange(task, 'end', e.target.value)}
+          />
+        </ResizableCol>
+
+        <ResizableCol width={colWidths.review} onResize={(w) => resizeCol('review', w)}>
+          <input
+            type="date"
+            className="gt-date-input"
+            value={task.reviewDate || ''}
+            onChange={(e) => saveTask(task, { reviewDate: e.target.value })}
+          />
+        </ResizableCol>
+
+        <ResizableCol width={colWidths.dependsOn} onResize={(w) => resizeCol('dependsOn', w)}>
+          <select
+            className="gt-date-input"
+            style={{ fontFamily: 'inherit' }}
+            value={task.dependsOn || ''}
+            onChange={(e) => saveTask(task, { dependsOn: e.target.value })}
+          >
+            <option value="">—</option>
+            {tasksOf(c.id, clients, items, tasks, winStart, windowDays)
+              .filter((x) => x.id !== task.id)
+              .map((x) => <option key={x.id} value={x.id}>{x.activity}</option>)}
+          </select>
+        </ResizableCol>
+
+        <ResizableCol width={colWidths.objectiveParticular} onResize={(w) => resizeCol('objectiveParticular', w)}>
+          <AutoTextarea
+            value={task.objectiveParticular}
+            readOnly={isPanel}
+            placeholder="¿Qué logra esta actividad?"
+            onCommit={(v) => saveTask(task, { objectiveParticular: v })}
+          />
+        </ResizableCol>
+
+        <ResizableCol width={colWidths.metric} onResize={(w) => resizeCol('metric', w)}>
+          <input
+            list="gx-metrics"
+            className="gt-date-input"
+            style={{ fontFamily: 'inherit' }}
+            defaultValue={task.metric || ''}
+            placeholder="—"
+            onBlur={(e) => { if (e.target.value !== (task.metric || '')) saveTask(task, { metric: e.target.value }); }}
           />
         </ResizableCol>
 
@@ -534,6 +653,18 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
             {key === 'status' && (
               <ColumnFilter label="estatus" options={STATUSES} selected={statusFilter} onChange={setStatusFilter} />
             )}
+            {key === 'projectType' && (
+              <ColumnFilter label="tipo de proyecto" options={PROJECT_TYPES} selected={projectTypeFilter} onChange={setProjectTypeFilter} />
+            )}
+            {key === 'priority' && (
+              <ColumnFilter label="prioridad" options={PRIORITIES.map(([v]) => v)} selected={priorityFilter} onChange={setPriorityFilter} />
+            )}
+            {key === 'freq' && (
+              <ColumnFilter label="frecuencia" options={['One-shot', 'Diaria', 'Semanal', 'Quincenal', 'Mensual', 'Mensual (1er lunes)']} selected={freqFilter} onChange={setFreqFilter} />
+            )}
+            {key === 'resp' && (
+              <ColumnFilter label="responsable" options={respOptions} selected={respFilter} onChange={setRespFilter} />
+            )}
           </ResizableCol>
         ))}
         <TimelineHeader winStart={winStart} windowDays={windowDays} pxPerDay={scale.pxPerDay} headerGroup={headerGroup} />
@@ -592,10 +723,32 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
     );
   }
 
+  function AdvisorBoard({ clientTaskLists }) {
+    const { overdueByClient, planningGaps } = advisorWarnings(clientTaskLists);
+    if (!overdueByClient.length && !planningGaps.length) return null;
+    return (
+      <div className="advisor-board">
+        {overdueByClient.map(({ client, tasks: ts }) => (
+          <div key={'ov-' + client.id} className="advisor-item">
+            <b>⚠ {client.name}</b>
+            {ts.length} pendiente(s) atrasada(s) sin fecha nueva: {ts.map((t) => t.activity).join(', ')}
+          </div>
+        ))}
+        {planningGaps.map((client) => (
+          <div key={'gap-' + client.id} className="advisor-item gap">
+            <b>— {client.name}</b>
+            sin ninguna próxima fecha planeada, le falta agendar siguiente paso.
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   function SuperView() {
     const allTasksFlat = [];
     CL.forEach((c) => allTasksFlat.push(...tasksOf(c.id, clients, items, tasks, winStart, windowDays)));
     const today = todayStr();
+    const clientTaskLists = CL.map((c) => ({ client: c, tasks: tasksOf(c.id, clients, items, tasks, winStart, windowDays) }));
 
     const strip = CL.map((c) => {
       const ts = tasksOf(c.id, clients, items, tasks, winStart, windowDays);
@@ -634,7 +787,7 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
       <>
         <div className="strip">{strip}</div>
         <ScaleAndNav scopeTasks={allTasksFlat} />
-        <Controls scope={allTasksFlat} peopleCatalog={peopleCatalog} fResp={fResp} fPerson={fPerson} hideDone={hideDone} onRespChange={onRespChange} onPersonChange={onPersonChange} onToggleDone={() => setHideDone((h) => !h)} onShift={shift} onToday={goToday} />
+        <Controls hideDone={hideDone} onToggleDone={() => setHideDone((h) => !h)} onShift={shift} onToday={goToday} />
         <Legend />
         {rows.length ? (
           <div className="gantt-scroll">
@@ -648,6 +801,7 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
         )}
         {hidden > 0 && <p className="note-out">{hidden} tarea(s) con fecha fuera de esta ventana. Usa las flechas, el selector de fecha o &quot;Ver proyecto completo&quot;.</p>}
         <UnscheduledList list={unscheduled} />
+        <AdvisorBoard clientTaskLists={clientTaskLists} />
       </>
     );
   }
@@ -660,9 +814,19 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
     const vis = dated.filter((t) => t.occ || !span(t, winStart, windowDays).out);
     const und = all.filter((t) => !t.start);
     const out = dated.length - vis.length;
+    const objectivePlaceholder = (c.projectTypes || []).map((t) => OBJECTIVE_TEMPLATES[t]).filter(Boolean)[0] || 'Define el objetivo general de este cliente…';
+    const ownTasksUnfiltered = tasksOf(c.id, clients, items, tasks, winStart, windowDays);
 
     return (
       <>
+        <div className="client-objective">
+          <span className="client-objective-label">Objetivo General</span>
+          <AutoTextarea
+            value={c.objectiveGeneral}
+            placeholder={objectivePlaceholder}
+            onCommit={(v) => onUpdateClient(c.id, { objectiveGeneral: v })}
+          />
+        </div>
         {lm ? (
           <section className="meeting">
             <div className="kicker">Última junta · {fmtY(lm.date)}</div>
@@ -685,7 +849,7 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
           </section>
         )}
         <ScaleAndNav scopeTasks={all} />
-        <Controls scope={all} peopleCatalog={peopleCatalog} fResp={fResp} fPerson={fPerson} hideDone={hideDone} onRespChange={onRespChange} onPersonChange={onPersonChange} onToggleDone={() => setHideDone((h) => !h)} onShift={shift} onToday={goToday} />
+        <Controls hideDone={hideDone} onToggleDone={() => setHideDone((h) => !h)} onShift={shift} onToday={goToday} />
         <Legend />
         {vis.length ? (
           <div className="gantt-scroll">
@@ -699,6 +863,7 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
         )}
         {out > 0 && <p className="note-out">{out} tarea(s) con fecha fuera de esta ventana.</p>}
         <UnscheduledList list={und} />
+        <AdvisorBoard clientTaskLists={[{ client: c, tasks: ownTasksUnfiltered }]} />
       </>
     );
   }
@@ -713,8 +878,16 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
           <div><h2>Gantt de clientes</h2><p>{sub}</p></div>
           <button className="primary" onClick={() => setAddTaskOpen(true)}>+ Agregar pendiente</button>
         </div>
-        <datalist id="gx-categories">
+        <datalist id="gx-categories-all">
           {categoryOptions.map((c) => <option key={c} value={c} />)}
+        </datalist>
+        {PROJECT_TYPES.map((t) => (
+          <datalist key={t} id={`gx-categories-${t.replace(/[^a-z0-9]/gi, '')}`}>
+            {categoriesFor(t).map((c) => <option key={c} value={c} />)}
+          </datalist>
+        ))}
+        <datalist id="gx-metrics">
+          {METRIC_OPTIONS.map((m) => <option key={m} value={m} />)}
         </datalist>
         <div className="gx-tabs">
           <button className="gx-tab" aria-current={activeTab === 'super' ? 'page' : undefined} onClick={() => setTab('super')}>Super Gantt</button>
@@ -783,6 +956,7 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
         open={addTaskOpen}
         clients={CL}
         categories={categoryOptions}
+        getTasksForClient={tasksForClientName}
         onClose={() => setAddTaskOpen(false)}
         onCreate={handleCreateTask}
       />

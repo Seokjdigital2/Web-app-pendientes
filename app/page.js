@@ -67,19 +67,6 @@ export default function Home() {
     }
   }
 
-  async function removeItem(id) {
-    setItems((prev) => {
-      const next = prev.filter((i) => i.id !== id);
-      refreshDayModal(next);
-      return next;
-    });
-    try {
-      await fetch(`/api/items/${id}`, { method: 'DELETE' });
-    } catch (e) {
-      toast('No se pudo eliminar');
-    }
-  }
-
   async function createTask(data) {
     const res = await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
     const resData = await res.json();
@@ -100,6 +87,20 @@ export default function Home() {
       return data.client;
     }
     return null;
+  }
+
+  async function updateClient(id, patch) {
+    const prevClients = clients;
+    setClients((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+    const res = await fetch(`/api/clients/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+    const data = await res.json();
+    if (!res.ok) {
+      setClients(prevClients);
+      toast('No se pudo guardar el cambio del cliente');
+      return null;
+    }
+    if (data.client) setClients((prev) => prev.map((c) => (c.id === id ? data.client : c)));
+    return data.client;
   }
 
   async function updateTask(id, patch) {
@@ -171,11 +172,12 @@ export default function Home() {
                 onUpdateItemField={updateItemField}
                 onCreateTask={createTask}
                 onCreateClient={createClient}
+                onUpdateClient={updateClient}
                 onUpdateTask={updateTask}
                 onDeleteTask={deleteTask}
               />
             )}
-            {tab === 'calendario' && <CalendarTab items={items} onOpenDay={openDayModal} />}
+            {tab === 'calendario' && <CalendarTab items={items} clients={clients} tasks={tasks} onOpenDay={openDayModal} />}
           </>
         )}
       </main>
@@ -184,8 +186,6 @@ export default function Home() {
         dateISO={dayModal.dateISO}
         list={dayModal.list}
         onClose={closeDayModal}
-        onUpdate={updateItemField}
-        onRemove={removeItem}
       />
       <footer>KJ Publicidad — pendientes del panel y Gantt de clientes</footer>
       <div className={`toast${toastMsg ? ' show' : ''}`}>{toastMsg}</div>

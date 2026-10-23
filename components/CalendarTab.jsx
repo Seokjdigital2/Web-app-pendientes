@@ -1,6 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { DAY_LABELS, FILTER_OPTIONS, colorForClient, fmtH, isoDateLocal, occurrencesForRange } from '@/lib/logic';
+import { DAY_LABELS, isoDateLocal } from '@/lib/logic';
+import { calendarOccurrences, PRIORITIES } from '@/lib/gantt';
 
 function startOfMonth() {
   const d = new Date();
@@ -9,7 +10,7 @@ function startOfMonth() {
   return d;
 }
 
-export default function CalendarTab({ items, onOpenDay }) {
+export default function CalendarTab({ items, clients, tasks, onOpenDay }) {
   const [calMonth, setCalMonth] = useState(startOfMonth());
   const [calFilter, setCalFilter] = useState('all');
 
@@ -25,7 +26,7 @@ export default function CalendarTab({ items, onOpenDay }) {
     gridEnd.setDate(gridEnd.getDate() + totalCells - 1);
     const startISO = isoDateLocal(gridStart);
     const endISO = isoDateLocal(gridEnd);
-    const occMap = occurrencesForRange(items, startISO, endISO);
+    const occMap = calendarOccurrences(clients, items, tasks, startISO, endISO);
     const thisMonth = calMonth.getMonth();
     const cells = [];
     for (let i = 0; i < totalCells; i++) {
@@ -33,14 +34,14 @@ export default function CalendarTab({ items, onOpenDay }) {
       d.setDate(d.getDate() + i);
       const dISO = isoDateLocal(d);
       let dayItems = occMap[dISO] || [];
-      if (calFilter !== 'all') dayItems = dayItems.filter((it) => it.p === calFilter);
-      dayItems = dayItems.slice().sort((a, b) => (a.client || '').localeCompare(b.client || ''));
+      if (calFilter !== 'all') dayItems = dayItems.filter((it) => (it.priority || '2') === calFilter);
+      dayItems = dayItems.slice().sort((a, b) => (a.clientName || '').localeCompare(b.clientName || ''));
       cells.push({ d, dISO, dayItems, isOtherMonth: d.getMonth() !== thisMonth, isToday: dISO === todayISO });
     }
-    const clientsSeen = new Set();
-    Object.values(occMap).flat().forEach((it) => { if (it.client) clientsSeen.add(it.client); });
-    return { cells, clientsSeen: [...clientsSeen].sort() };
-  }, [items, calMonth, calFilter, todayISO]);
+    const clientsSeen = new Map();
+    Object.values(occMap).flat().forEach((it) => { if (it.clientName) clientsSeen.set(it.clientName, it.clientColor); });
+    return { cells, clientsSeen: [...clientsSeen.entries()].sort((a, b) => a[0].localeCompare(b[0])) };
+  }, [items, clients, tasks, calMonth, calFilter, todayISO]);
 
   function shiftMonth(delta) {
     setCalMonth((m) => new Date(m.getFullYear(), m.getMonth() + delta, 1));
@@ -51,11 +52,12 @@ export default function CalendarTab({ items, onOpenDay }) {
       <div className="section-head">
         <div>
           <h2>Calendario</h2>
-          <p>Vista mensual — los recurrentes se repiten automáticamente en cada ocurrencia</p>
+          <p>Vista mensual — alimentado por las tareas reales del Gantt, con su % de avance</p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <div className="filters">
-            {FILTER_OPTIONS.map(([val, label]) => (
+            <button className={calFilter === 'all' ? 'active' : ''} onClick={() => setCalFilter('all')}>Todos</button>
+            {PRIORITIES.map(([val, label]) => (
               <button key={val} className={calFilter === val ? 'active' : ''} onClick={() => setCalFilter(val)}>{label}</button>
             ))}
           </div>
@@ -77,9 +79,9 @@ export default function CalendarTab({ items, onOpenDay }) {
         {monthCells.clientsSeen.length === 0 ? (
           <span className="cal-legend-item">Sin actividades este mes</span>
         ) : (
-          monthCells.clientsSeen.map((c) => (
-            <span className="cal-legend-item" key={c}>
-              <span className="cal-legend-dot" style={{ background: colorForClient(c) }}></span>{c}
+          monthCells.clientsSeen.map(([name, color]) => (
+            <span className="cal-legend-item" key={name}>
+              <span className="cal-legend-dot" style={{ background: color }}></span>{name}
             </span>
           ))
         )}
@@ -95,18 +97,18 @@ export default function CalendarTab({ items, onOpenDay }) {
               <div className="cal-cell-date">{d.getDate()}</div>
               <div className="cal-cell-items">
                 {shown.map((it, idx) => {
-                  const hrs = fmtH(it.hours) ? ` · ${fmtH(it.hours)}` : '';
+                  const pct = it.progress == null ? '' : ` · ${it.progress}%`;
                   const hecho = it.status === 'Hecho' ? ' is-hecho' : '';
-                  const title = `${it.client || ''} — ${it.activity}${it.desc ? ' · ' + it.desc : ''}`;
+                  const title = `${it.clientName || ''} — ${it.activity}${it.note ? ' · ' + it.note : ''}`;
                   return (
                     <div
                       key={it.id + idx}
                       className={`cal-chip${hecho}`}
-                      style={{ background: colorForClient(it.client) }}
+                      style={{ background: it.clientColor }}
                       title={title}
                       onClick={() => onOpenDay(dISO, dayItems)}
                     >
-                      <span className="t">{it.client || ''}</span> {it.status === 'Hecho' ? '✓ ' : ''}{it.activity}{hrs}
+                      <span className="t">{it.clientName || ''}</span> {it.status === 'Hecho' ? '✓ ' : ''}{it.activity}{pct}
                     </div>
                   );
                 })}

@@ -21,6 +21,15 @@ CREATE TABLE IF NOT EXISTS items (
 ALTER TABLE items ADD COLUMN IF NOT EXISTS category TEXT DEFAULT '';
 ALTER TABLE items ADD COLUMN IF NOT EXISTS deliverable TEXT DEFAULT '';
 
+-- PMO multidisciplinario: tipo de proyecto, objetivos y dependencias también
+-- en los pendientes sintéticos (items), igual que en las tareas reales.
+ALTER TABLE items ADD COLUMN IF NOT EXISTS project_type TEXT DEFAULT '';
+ALTER TABLE items ADD COLUMN IF NOT EXISTS objective_general TEXT DEFAULT '';
+ALTER TABLE items ADD COLUMN IF NOT EXISTS objective_particular TEXT DEFAULT '';
+ALTER TABLE items ADD COLUMN IF NOT EXISTS depends_on TEXT DEFAULT '';
+ALTER TABLE items ADD COLUMN IF NOT EXISTS review_date TEXT DEFAULT '';
+ALTER TABLE items ADD COLUMN IF NOT EXISTS metric TEXT DEFAULT '';
+
 CREATE TABLE IF NOT EXISTS clients (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -30,6 +39,13 @@ CREATE TABLE IF NOT EXISTS clients (
   last_meeting JSONB,
   updated_at TEXT DEFAULT ''
 );
+
+-- Tipos de proyecto del cliente (SEO/RRSS/Diseño Web/Ads-SEM/Interno), el
+-- Objetivo General vigente, y si sigue activo (baja reversible: se oculta de
+-- la interfaz sin borrar su historial).
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS project_types JSONB DEFAULT '[]';
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS objective_general TEXT DEFAULT '';
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE;
 
 CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY,
@@ -57,6 +73,18 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_ids JSONB DEFAULT '[]';
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS progress INTEGER;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS blocked_reason TEXT DEFAULT '';
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS deliverable TEXT DEFAULT '';
+
+-- PMO multidisciplinario: tipo de proyecto, prioridad (1/2/3 — "R" de
+-- recurrente ya no es prioridad, ver date_kind/freq para la frecuencia),
+-- objetivos, dependencia entre tareas ("Depende de") y frecuencia real.
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS project_type TEXT DEFAULT '';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT '2';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS objective_general TEXT DEFAULT '';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS objective_particular TEXT DEFAULT '';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS freq TEXT DEFAULT '';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS depends_on TEXT DEFAULT '';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS review_date TEXT DEFAULT '';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS metric TEXT DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS people (
   id TEXT PRIMARY KEY,
