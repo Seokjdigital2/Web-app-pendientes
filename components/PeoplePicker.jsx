@@ -1,18 +1,47 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
+// El menú se monta en un portal sobre <body> y se posiciona con
+// position:fixed, porque las celdas de la tabla (.gt-col) recortan con
+// overflow:hidden cualquier dropdown que viva dentro de ellas.
 export default function PeoplePicker({ people, selectedIds, onChange, onCreatePerson, disabled }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
   const [newName, setNewName] = useState('');
-  const ref = useRef(null);
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
 
   useEffect(() => {
-    function onDocClick(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    if (!open) return;
+    function place() {
+      const r = btnRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const menuW = menuRef.current?.offsetWidth || 200;
+      const menuH = menuRef.current?.offsetHeight || 260;
+      let left = r.left;
+      let top = r.bottom + 4;
+      if (left + menuW > window.innerWidth - 8) left = Math.max(8, window.innerWidth - menuW - 8);
+      if (top + menuH > window.innerHeight - 8) top = Math.max(8, r.top - menuH - 4);
+      setPos({ top, left });
     }
-    document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
-  }, []);
+    place();
+    const raf = requestAnimationFrame(place);
+    function onDocMouseDown(e) {
+      if (btnRef.current?.contains(e.target)) return;
+      if (menuRef.current?.contains(e.target)) return;
+      setOpen(false);
+    }
+    document.addEventListener('mousedown', onDocMouseDown);
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      cancelAnimationFrame(raf);
+      document.removeEventListener('mousedown', onDocMouseDown);
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [open]);
 
   const selectedLabels = selectedIds
     .map((id) => people.find((p) => p.id === id)?.label || id)
@@ -32,8 +61,9 @@ export default function PeoplePicker({ people, selectedIds, onChange, onCreatePe
   }
 
   return (
-    <div className="people-picker" ref={ref} style={{ position: 'relative' }}>
+    <div className="people-picker" style={{ position: 'relative' }}>
       <button
+        ref={btnRef}
         type="button"
         className="people-picker-trigger"
         disabled={disabled}
@@ -42,8 +72,8 @@ export default function PeoplePicker({ people, selectedIds, onChange, onCreatePe
       >
         {selectedLabels || '— asignar —'}
       </button>
-      {open && (
-        <div className="people-picker-menu">
+      {open && pos && createPortal(
+        <div ref={menuRef} className="people-picker-menu" style={{ position: 'fixed', top: pos.top, left: pos.left }}>
           {people.map((p) => (
             <label key={p.id} className="people-picker-item">
               <input type="checkbox" checked={selectedIds.includes(p.id)} onChange={() => toggle(p.id)} />
@@ -62,7 +92,8 @@ export default function PeoplePicker({ people, selectedIds, onChange, onCreatePe
             />
             <button type="button" onClick={createAndAdd}>+</button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

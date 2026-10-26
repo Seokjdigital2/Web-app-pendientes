@@ -17,6 +17,11 @@ import { advisorWarnings } from '@/lib/advisor';
 
 const HEADER_GROUP = { dia: 'day', semana: 'week', mes: 'month' };
 
+// Equipo interno de KJ (no clientes): únicos con botón de acceso rápido.
+// El resto de responsables (gente del lado del cliente) solo se filtra
+// desde el desplegable de la columna Responsables.
+const KJ_TEAM = ['Ali', 'Alin', 'Lalo', 'Alejandro', 'Laura'];
+
 const DEFAULT_COL_WIDTHS = {
   name: 200,
   client: 110,
@@ -38,12 +43,12 @@ const DEFAULT_COL_WIDTHS = {
 
 const COLUMNS = [
   ['name', 'Nombre de la tarea'],
+  ['resp', 'Responsables'],
   ['client', 'Cliente'],
   ['projectType', 'Tipo de proyecto'],
   ['category', 'Categoría'],
   ['priority', 'Prioridad'],
   ['freq', 'Frecuencia'],
-  ['resp', 'Responsables'],
   ['status', 'Estatus'],
   ['start', 'Fecha inicio'],
   ['end', 'Fecha entrega'],
@@ -894,6 +899,18 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
           {CL.map((c) => (
             <button key={c.id} className="gx-tab" aria-current={activeTab === c.id ? 'page' : undefined} onClick={() => setTab(c.id)}>
               <span className="dot" style={{ background: colorOf(c) }}></span>{c.name}
+            </button>
+          ))}
+        </div>
+        <div className="gx-tabs">
+          {KJ_TEAM.map((label) => (
+            <button
+              key={label}
+              className="gx-tab"
+              aria-current={respFilter.includes(label) ? 'page' : undefined}
+              onClick={() => setRespFilter((prev) => (prev.includes(label) ? prev.filter((x) => x !== label) : [...prev, label]))}
+            >
+              {label}
             </button>
           ))}
         </div>
