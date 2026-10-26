@@ -75,7 +75,7 @@ function Legend() {
       <span><i></i>Fecha acordada en junta</span>
       <span><i className="est"></i>Fecha estimada</span>
       <span><i className="done"></i>Hecho</span>
-      <span><i className="blk"></i>Bloqueado</span>
+      <span><i className="blk"></i>Bloqueada (depende de otra)</span>
       <span><i className="cnf"></i>Por confirmar</span>
       <span><i className="mst"></i>Hito</span>
     </div>
@@ -160,6 +160,14 @@ function assigneesOfTask(t, catalog) {
     return t.assigneeIds.map((id) => ({ k: id, label: catalog?.find((p) => p.id === id)?.label || id }));
   }
   return peopleOf(t.resp);
+}
+
+// "Bloqueada" ya no se elige a mano: se calcula solo si depende de otra
+// actividad (del mismo cliente) que todavía no está Hecho.
+function isDependencyBlocked(t, siblingTasks) {
+  if (!t.dependsOn) return false;
+  const dep = siblingTasks.find((x) => x.id === t.dependsOn);
+  return !!dep && dep.status !== 'Hecho';
 }
 
 export default function GanttTab({ items, clients, tasks, onUpdateItemField, onSaveOccurrence, onCreateTask, onCreateClient, onUpdateTask, onDeleteTask, onUpdateClient }) {
@@ -318,10 +326,6 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onS
   }
 
   function requestStatusChange(task, newStatus) {
-    if (newStatus === 'Bloqueado') {
-      setModal({ type: 'blocked', taskId: task.id, task });
-      return;
-    }
     if (task.status === 'Hecho' && newStatus !== 'Hecho') {
       setModal({ type: 'reopen', taskId: task.id, task, newStatus, defaultValue: String(task.progress ?? 0) });
       return;
@@ -517,9 +521,10 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onS
 
         <ResizableCol width={colWidths.status} onResize={(w) => resizeCol('status', w)}>
           <select
-            className={`st st-${SKEY[task.status] || 'p'}`}
+            className={`st st-${dependencyPending ? 'b' : SKEY[task.status] || 'p'}`}
             value={task.status || 'Pendiente'}
             onChange={(e) => requestStatusChange(task, e.target.value)}
+            title={dependencyPending ? `Bloqueada — depende de: ${dependency.activity}` : undefined}
           >
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
@@ -604,10 +609,8 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onS
 
         <ResizableCol width={colWidths.barriers} onResize={(w) => resizeCol('barriers', w)}>
           <div style={{ width: '100%' }}>
-            {task.status === 'Bloqueado' && (
-              task.blockedReason
-                ? <span className="gt-blocked-chip">⛔ {task.blockedReason}</span>
-                : <span className="gt-blocked-missing" onClick={() => setModal({ type: 'blocked', taskId: task.id, task })}>Falta especificar el bloqueo</span>
+            {dependencyPending && (
+              <span className="gt-blocked-chip">⛔ Bloqueada — depende de &quot;{dependency.activity}&quot;</span>
             )}
             <AutoTextarea
               value={task.note}
@@ -625,7 +628,7 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onS
               disabled={isPanel || task.occ}
               onCommit={(pct) => saveTask(task, { progress: pct })}
             >
-              <ProgressBar task={task} sp={sp} color={col} onColorV={on} winStart={winStart} pxPerDay={scale.pxPerDay} />
+              <ProgressBar task={task} sp={sp} color={col} onColorV={on} winStart={winStart} pxPerDay={scale.pxPerDay} blocked={dependencyPending} />
             </PercentPopover>
           )}
         </TimelineBars>
@@ -633,13 +636,13 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onS
     );
   }
 
-  function ProgressBar({ task, sp, color, onColorV, winStart: ws, pxPerDay }) {
+  function ProgressBar({ task, sp, color, onColorV, winStart: ws, pxPerDay, blocked }) {
     if (task.occ) {
       return Object.keys(task.occ).sort().map((d) => {
         const i = (U(d) - ws) / DAY;
         if (i < 0 || i > windowDays - 1) return null;
         const st = task.occ[d].status;
-        const cls = 'bar' + (st === 'Hecho' ? ' done' : '') + (st === 'Bloqueado' ? ' blk' : '') + (st === 'Por confirmar' ? ' cnf' : '');
+        const cls = 'bar' + (st === 'Hecho' ? ' done' : '') + (st === 'Por confirmar' ? ' cnf' : '');
         return <div key={d} className={cls} style={{ '--s': i, '--l': 1, '--c': color, '--on': onColorV }} title={task.activity + ' · ' + fmt(d)}>{st === 'Hecho' ? '✓' : ''}</div>;
       });
     }
@@ -647,13 +650,13 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onS
     const st = task.status;
     const pct = task.progress;
     if (task.milestone) {
-      return <div className={'ms' + (st === 'Bloqueado' ? ' blk' : '') + (st === 'Hecho' ? ' done' : '')} style={{ '--s': sp.s, '--c': color }} title={task.activity}></div>;
+      return <div className={'ms' + (blocked ? ' blk' : '') + (st === 'Hecho' ? ' done' : '')} style={{ '--s': sp.s, '--c': color }} title={task.activity}></div>;
     }
     const s0 = Math.max(sp.s, 0);
     const e0 = Math.min(sp.e, windowDays - 1);
     const l = e0 - s0 + 1;
     const cls = 'bar' + (sp.s < 0 ? ' cl' : '') + (sp.e > windowDays - 1 && task.end ? ' cr' : '') + (task.dateKind === 'inferred' ? ' est' : '') + (!task.end ? ' open' : '') +
-      (st === 'Hecho' ? ' done' : '') + (st === 'Bloqueado' ? ' blk' : '') + (st === 'Por confirmar' ? ' cnf' : '');
+      (st === 'Hecho' ? ' done' : '') + (blocked ? ' blk' : '') + (st === 'Por confirmar' ? ' cnf' : '');
     const label = pct == null ? 'Avance sin registrar' : `${pct}%`;
     return (
       <div className={cls} style={{ '--s': s0, '--l': l, '--c': color, '--on': onColorV }} title={`${task.activity} · ${datesText(task)} · ${label}`}>
@@ -791,7 +794,7 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onS
     const strip = CL.map((c) => {
       const ts = tasksOf(c.id, clients, items, tasks, winStart, windowDays);
       const open = ts.filter((t) => t.status !== 'Hecho');
-      const blk = ts.filter((t) => t.status === 'Bloqueado').length;
+      const blk = ts.filter((t) => isDependencyBlocked(t, ts)).length;
       const nx = open.filter((t) => t.start && (t.end || t.start) >= today).map((t) => t.end || t.start).sort()[0];
       return (
         <button key={c.id} className="sum" onClick={() => setTab(c.id)}>
@@ -950,20 +953,6 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onS
         {cur ? <ClientView c={cur} /> : <SuperView />}
       </div>
 
-      <PromptModal
-        open={modal?.type === 'blocked'}
-        title="Motivo del bloqueo"
-        message="Indica qué está impidiendo avanzar (qué se espera, de quién depende, o qué problema hay que resolver)."
-        mode="text"
-        defaultValue={modal?.task?.blockedReason || ''}
-        confirmLabel="Bloquear tarea"
-        onConfirm={(reason) => {
-          if (!reason.trim()) return toast('Falta el motivo del bloqueo');
-          saveTask(modal.task, { status: 'Bloqueado', blockedReason: reason.trim() });
-          setModal(null);
-        }}
-        onCancel={() => setModal(null)}
-      />
       <PromptModal
         open={modal?.type === 'reopen'}
         title="Reabrir tarea"
