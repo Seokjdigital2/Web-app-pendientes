@@ -162,7 +162,7 @@ function assigneesOfTask(t, catalog) {
   return peopleOf(t.resp);
 }
 
-export default function GanttTab({ items, clients, tasks, onUpdateItemField, onCreateTask, onCreateClient, onUpdateTask, onDeleteTask, onUpdateClient }) {
+export default function GanttTab({ items, clients, tasks, onUpdateItemField, onSaveOccurrence, onCreateTask, onCreateClient, onUpdateTask, onDeleteTask, onUpdateClient }) {
   const [tab, setTab] = useState('super');
   const [hideDone, setHideDone] = useState(false);
   const [scaleKey, setScaleKey] = useState('dia');
@@ -261,6 +261,39 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onC
     if (String(task.id).indexOf('p-') === 0) {
       // tarea sintética del panel de pendientes: solo estatus/fecha/nota/nombre viven en `items`
       const itemId = task.id.slice(2);
+      if (task.occ && 'status' in patch) {
+        // Grupo recurrente (ej. Weekly): la fila "plantilla" (itemId) no es
+        // ninguna ocurrencia en particular, así que su status no cambia lo
+        // que se ve en el Gantt. Se guarda en una fila propia de ESTA
+        // ocurrencia (la fecha mostrada ahora mismo, task.start).
+        const occDate = task.start;
+        if (!occDate) {
+          toast('Esta ocurrencia no tiene fecha para marcar el estatus.');
+        } else {
+          const clientName = CL.find((c) => c.id === task.client)?.name || task.client;
+          await onSaveOccurrence({
+            id: `${itemId}__occ-${occDate}`,
+            client: clientName,
+            activity: task.activity,
+            resp: task.resp,
+            p: task.priority,
+            category: task.category,
+            deliverable: task.deliverable,
+            projectType: task.projectType,
+            objectiveGeneral: task.objectiveGeneral,
+            objectiveParticular: task.objectiveParticular,
+            dependsOn: task.dependsOn,
+            reviewDate: task.reviewDate,
+            metric: task.metric,
+            date: occDate,
+            status: patch.status,
+          });
+        }
+        const rest = { ...patch };
+        delete rest.status;
+        if (!Object.keys(rest).length) return;
+        patch = rest;
+      }
       const map = {
         status: 'status', note: 'desc', activity: 'activity', category: 'category', deliverable: 'deliverable', doc: 'doc',
         priority: 'p', freq: 'freq', projectType: 'projectType', objectiveGeneral: 'objectiveGeneral', objectiveParticular: 'objectiveParticular', dependsOn: 'dependsOn',

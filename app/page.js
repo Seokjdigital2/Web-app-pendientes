@@ -67,6 +67,26 @@ export default function Home() {
     }
   }
 
+  // Marca el estatus de UNA ocurrencia puntual de una tarea recurrente del
+  // panel (ej. el "Weekly" de esta semana), creando/actualizando su propia
+  // fila histórica en vez de tocar la fila plantilla de la recurrencia.
+  async function saveOccurrence(data) {
+    try {
+      const res = await fetch('/api/items/occurrence', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.error || 'No se pudo guardar la ocurrencia');
+      setItems((prev) => {
+        const next = prev.some((i) => i.id === resData.item.id)
+          ? prev.map((i) => (i.id === resData.item.id ? resData.item : i))
+          : [...prev, resData.item];
+        refreshDayModal(next);
+        return next;
+      });
+    } catch (e) {
+      toast(e.message || 'No se pudo guardar el cambio');
+    }
+  }
+
   async function createTask(data) {
     const res = await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
     const resData = await res.json();
@@ -170,6 +190,7 @@ export default function Home() {
                 clients={clients}
                 tasks={tasks}
                 onUpdateItemField={updateItemField}
+                onSaveOccurrence={saveOccurrence}
                 onCreateTask={createTask}
                 onCreateClient={createClient}
                 onUpdateClient={updateClient}
