@@ -450,6 +450,15 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onS
           </div>
         </ResizableCol>
 
+        <ResizableCol width={colWidths.resp} onResize={(w) => resizeCol('resp', w)}>
+          <PeoplePicker
+            people={peopleCatalog}
+            selectedIds={assignees.map((p) => p.k)}
+            onChange={(ids) => saveTask(task, { assigneeIds: ids })}
+            onCreatePerson={createPerson}
+          />
+        </ResizableCol>
+
         <ResizableCol width={colWidths.client} onResize={(w) => resizeCol('client', w)}>
           {isPanel ? (
             <span style={{ fontSize: 12.5 }}>{client.name}</span>
@@ -508,15 +517,6 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onS
           >
             {FREQ_LABELS.map(([v, l]) => <option key={v || 'one'} value={v}>{l}</option>)}
           </select>
-        </ResizableCol>
-
-        <ResizableCol width={colWidths.resp} onResize={(w) => resizeCol('resp', w)}>
-          <PeoplePicker
-            people={peopleCatalog}
-            selectedIds={assignees.map((p) => p.k)}
-            onChange={(ids) => saveTask(task, { assigneeIds: ids })}
-            onCreatePerson={createPerson}
-          />
         </ResizableCol>
 
         <ResizableCol width={colWidths.status} onResize={(w) => resizeCol('status', w)}>
