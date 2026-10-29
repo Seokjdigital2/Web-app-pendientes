@@ -29,6 +29,7 @@ const DEFAULT_COL_WIDTHS = {
   category: 120,
   priority: 110,
   freq: 110,
+  hours: 90,
   resp: 130,
   status: 118,
   start: 108,
@@ -49,6 +50,7 @@ const COLUMNS = [
   ['category', 'Categoría'],
   ['priority', 'Prioridad'],
   ['freq', 'Frecuencia'],
+  ['hours', 'Horas'],
   ['status', 'Estatus'],
   ['start', 'Fecha inicio'],
   ['end', 'Fecha entrega'],
@@ -374,6 +376,7 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onS
         metric: form.metric,
         reviewDate: form.reviewDate,
         dependsOn: form.dependsOn,
+        hours: form.hours,
         resp: form.resp,
         assigneeIds: assigneePeople.map((p) => p.k),
         status: form.status,
@@ -518,6 +521,20 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onS
           >
             {FREQ_LABELS.map(([v, l]) => <option key={v || 'one'} value={v}>{l}</option>)}
           </select>
+        </ResizableCol>
+
+        <ResizableCol width={colWidths.hours} onResize={(w) => resizeCol('hours', w)}>
+          <input
+            type="number"
+            min="0"
+            step="0.25"
+            className="gt-date-input"
+            style={{ fontFamily: 'inherit' }}
+            defaultValue={task.hours || ''}
+            placeholder="—"
+            title="Horas estimadas que te lleva esta actividad"
+            onBlur={(e) => { if (e.target.value !== (task.hours || '')) saveTask(task, { hours: e.target.value }); }}
+          />
         </ResizableCol>
 
         <ResizableCol width={colWidths.status} onResize={(w) => resizeCol('status', w)}>

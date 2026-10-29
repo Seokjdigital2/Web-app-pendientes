@@ -86,6 +86,11 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS depends_on TEXT DEFAULT '';
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS review_date TEXT DEFAULT '';
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS metric TEXT DEFAULT '';
 
+-- Horas estimadas por actividad, para medir capacidad/disponibilidad por
+-- persona (pestaña Tiempo). En una recurrente, este valor de la tarea real
+-- es el default; cada ocurrencia (items) puede traer su propio override.
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS hours TEXT DEFAULT '';
+
 CREATE TABLE IF NOT EXISTS people (
   id TEXT PRIMARY KEY,
   label TEXT NOT NULL,

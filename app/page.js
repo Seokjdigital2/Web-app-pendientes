@@ -2,11 +2,13 @@
 import { useEffect, useRef, useState } from 'react';
 import CalendarTab from '@/components/CalendarTab';
 import GanttTab from '@/components/GanttTab';
+import TimeTab from '@/components/TimeTab';
 import DayModal from '@/components/DayModal';
 
 const TABS = [
   ['gantt', 'Gantt'],
   ['calendario', 'Calendario'],
+  ['tiempo', 'Tiempo'],
 ];
 
 export default function Home() {
@@ -199,6 +201,7 @@ export default function Home() {
               />
             )}
             {tab === 'calendario' && <CalendarTab items={items} clients={clients} tasks={tasks} onOpenDay={openDayModal} />}
+            {tab === 'tiempo' && <TimeTab items={items} clients={clients} tasks={tasks} />}
           </>
         )}
       </main>

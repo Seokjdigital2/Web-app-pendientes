@@ -16,6 +16,7 @@ const EMPTY = {
   end: '',
   reviewDate: '',
   dependsOn: '',
+  hours: '',
   objectiveParticular: '',
   metric: '',
   deliverable: '',
@@ -61,6 +62,7 @@ export default function AddTaskModal({ open, clients, categories, getTasksForCli
       end: form.end,
       reviewDate: form.reviewDate,
       dependsOn: form.dependsOn,
+      hours: form.hours,
       objectiveParticular: form.objectiveParticular.trim(),
       metric: form.metric.trim(),
       deliverable: form.deliverable.trim(),
@@ -124,6 +126,10 @@ export default function AddTaskModal({ open, clients, categories, getTasksForCli
               <select value={form.freq} onChange={(e) => set('freq', e.target.value)}>
                 {FREQ_LABELS.map(([v, l]) => <option key={v || 'one'} value={v}>{l}</option>)}
               </select>
+            </label>
+            <label className="add-task-field" style={{ flex: 1 }}>
+              Horas estimadas
+              <input type="number" min="0" step="0.25" value={form.hours} onChange={(e) => set('hours', e.target.value)} placeholder="Ej. 0.5" />
             </label>
           </div>
           <label className="add-task-field">
