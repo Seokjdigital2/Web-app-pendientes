@@ -228,6 +228,11 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onS
     if (projectTypeFilter.length && !projectTypeFilter.includes(t.projectType || '(sin tipo)')) return false;
     if (priorityFilter.length && !priorityFilter.includes(t.priority || '2')) return false;
     if (freqFilter.length && !freqFilter.includes(t.freq || 'One-shot')) return false;
+    if (goToDate) {
+      if (!t.start) return false;
+      const end = t.end || t.start;
+      if (goToDate < t.start || goToDate > end) return false;
+    }
     return true;
   }
 
@@ -775,7 +780,15 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onS
           ))}
         </div>
         <div className="chips" style={{ alignItems: 'center' }}>
-          <input type="date" className="gt-date-input" style={{ width: 140, border: '1px solid var(--line)', background: '#fff' }} value={goToDate} onChange={(e) => { setGoToDate(e.target.value); jumpToDate(e.target.value); }} />
+          <input
+            type="date"
+            className="gt-date-input"
+            style={{ width: 140, border: goToDate ? '1px solid var(--coral)' : '1px solid var(--line)', background: '#fff' }}
+            value={goToDate}
+            title="Filtrar: muestra solo lo que pasa en este día"
+            onChange={(e) => { setGoToDate(e.target.value); jumpToDate(e.target.value); }}
+          />
+          {goToDate && <button className="btn" onClick={() => setGoToDate('')}>Quitar filtro de fecha</button>}
           <button className="btn" onClick={() => viewFullProject(scopeTasks)}>Ver proyecto completo</button>
         </div>
       </div>
