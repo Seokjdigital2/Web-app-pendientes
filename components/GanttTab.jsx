@@ -267,45 +267,46 @@ export default function GanttTab({ items, clients, tasks, onUpdateItemField, onS
 
   async function saveTask(task, patch) {
     if (String(task.id).indexOf('p-') === 0) {
-      // tarea sintética del panel de pendientes: solo estatus/fecha/nota/nombre viven en `items`
-      const itemId = task.id.slice(2);
-      if (task.occ && 'status' in patch) {
-        // Grupo recurrente (ej. Weekly): la fila "plantilla" (itemId) no es
-        // ninguna ocurrencia en particular, así que su status no cambia lo
-        // que se ve en el Gantt. Se guarda en una fila propia de ESTA
-        // ocurrencia (la fecha mostrada ahora mismo, task.start).
-        const occDate = task.start;
-        if (!occDate) {
-          toast('Esta ocurrencia no tiene fecha para marcar el estatus.');
-        } else {
-          const clientName = CL.find((c) => c.id === task.client)?.name || task.client;
-          await onSaveOccurrence({
-            id: `${itemId}__occ-${occDate}`,
-            client: clientName,
-            activity: task.activity,
-            resp: task.resp,
-            p: task.priority,
-            category: task.category,
-            deliverable: task.deliverable,
-            projectType: task.projectType,
-            objectiveGeneral: task.objectiveGeneral,
-            objectiveParticular: task.objectiveParticular,
-            dependsOn: task.dependsOn,
-            reviewDate: task.reviewDate,
-            metric: task.metric,
-            date: occDate,
-            status: patch.status,
-          });
+      if (task.needsMaterialize) {
+        // Ocurrencia semanal/mensual que todavía no tiene fila propia en la
+        // base de datos: se crea ahora, con los valores que ya traía la
+        // fila (heredados de la plantilla) más lo que se acaba de editar.
+        const occDate = task.occDate || task.start;
+        if (!occDate) { toast('Esta ocurrencia no tiene fecha para guardar.'); return; }
+        const merged = { ...task, ...patch };
+        if (patch.assigneeIds) {
+          merged.resp = patch.assigneeIds.map((id) => peopleCatalog.find((p) => p.id === id)?.label || id).join(', ');
         }
-        const rest = { ...patch };
-        delete rest.status;
-        if (!Object.keys(rest).length) return;
-        patch = rest;
+        const clientName = CL.find((c) => c.id === task.client)?.name || task.client;
+        await onSaveOccurrence({
+          id: `${task.baseId}__occ-${occDate}`,
+          client: clientName,
+          activity: merged.activity,
+          resp: merged.resp,
+          p: merged.priority,
+          category: merged.category,
+          deliverable: merged.deliverable,
+          doc: merged.doc,
+          desc: merged.note,
+          projectType: merged.projectType,
+          objectiveGeneral: merged.objectiveGeneral,
+          objectiveParticular: merged.objectiveParticular,
+          dependsOn: merged.dependsOn,
+          reviewDate: merged.reviewDate,
+          metric: merged.metric,
+          hours: merged.hours,
+          date: occDate,
+          status: merged.status,
+        });
+        return;
       }
+      // fila ya existente del panel de pendientes (plantilla u ocurrencia
+      // puntual ya materializada): solo estos campos viven en `items`
+      const itemId = task.id.slice(2);
       const map = {
         status: 'status', note: 'desc', activity: 'activity', category: 'category', deliverable: 'deliverable', doc: 'doc',
         priority: 'p', freq: 'freq', projectType: 'projectType', objectiveGeneral: 'objectiveGeneral', objectiveParticular: 'objectiveParticular', dependsOn: 'dependsOn',
-        reviewDate: 'reviewDate', metric: 'metric',
+        reviewDate: 'reviewDate', metric: 'metric', hours: 'hours',
       };
       for (const [k, v] of Object.entries(patch)) {
         if (k === 'start' || k === 'end') await onUpdateItemField(itemId, 'date', v);
